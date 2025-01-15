@@ -358,5 +358,558 @@ contract Array {
 # Examples of removing array element
 
 ```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
 
+contract ArrayRemoveByShifting {
+    // [1, 2, 3] -- remove(1) --> [1, 3, 3] --> [1, 3]
+    // [1, 2, 3, 4, 5, 6] -- remove(2) --> [1, 2, 4, 5, 6, 6] --> [1, 2, 4, 5, 6]
+    // [1, 2, 3, 4, 5, 6] -- remove(0) --> [2, 3, 4, 5, 6, 6] --> [2, 3, 4, 5, 6]
+    // [1] -- remove(0) --> [1] --> []
+
+    uint256[] public arr;
+
+    function remove(uint256 _index) public {
+        require(_index < arr.length, "index out of bound");
+
+        for (uint256 i = _index; i < arr.length - 1; i++) {
+            arr[i] = arr[i + 1];
+        }
+        arr.pop();
+    }
+
+    function test() external {
+        arr = [1, 2, 3, 4, 5];
+        remove(2);
+        // [1, 2, 4, 5]
+        assert(arr[0] == 1);
+        assert(arr[1] == 2);
+        assert(arr[2] == 4);
+        assert(arr[3] == 5);
+        assert(arr.length == 4);
+
+        arr = [1];
+        remove(0);
+        // []
+        assert(arr.length == 0);
+    }
+}
+```
+
+# Enum
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Enum {
+    // Enum representing shipping status
+    enum Status {
+        Pending,
+        Shipped,
+        Accepted,
+        Rejected,
+        Canceled
+    }
+
+    // Default value is the first element listed in
+    // definition of the type, in this case "Pending"
+    Status public status;
+
+    // Returns uint
+    // Pending  - 0
+    // Shipped  - 1
+    // Accepted - 2
+    // Rejected - 3
+    // Canceled - 4
+    function get() public view returns (Status) {
+        return status;
+    }
+
+    // Update status by passing uint into input
+    function set(Status _status) public {
+        status = _status;
+    }
+
+    // You can update to a specific enum like this
+    function cancel() public {
+        status = Status.Canceled;
+    }
+
+    // delete resets the enum to its first value, 0
+    function reset() public {
+        delete status;
+    }
+}
+```
+
+# Structs
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Todos {
+    struct Todo {
+        string text;
+        bool completed;
+    }
+
+    // An array of 'Todo' structs
+    Todo[] public todos;
+
+    function create(string calldata _text) public {
+        // 3 ways to initialize a struct
+        // - calling it like a function
+        todos.push(Todo(_text, false));
+
+        // key value mapping
+        todos.push(Todo({text: _text, completed: false}));
+
+        // initialize an empty struct and then update it
+        Todo memory todo;
+        todo.text = _text;
+        // todo.completed initialized to false
+
+        todos.push(todo);
+    }
+
+    // Solidity automatically created a getter for 'todos' so
+    // you don't actually need this function.
+    function get(uint256 _index)
+        public
+        view
+        returns (string memory text, bool completed)
+    {
+        Todo storage todo = todos[_index];
+        return (todo.text, todo.completed);
+    }
+
+    // update text
+    function updateText(uint256 _index, string calldata _text) public {
+        Todo storage todo = todos[_index];
+        todo.text = _text;
+    }
+
+    // update completed
+    function toggleCompleted(uint256 _index) public {
+        Todo storage todo = todos[_index];
+        todo.completed = !todo.completed;
+    }
+}
+```
+
+# Data Locations
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.2;
+
+contract DataLocations {
+    uint256[] public arr;
+    mapping(uint256 => address) map;
+
+    struct MyStruct {
+        uint256 foo;
+    }
+
+    mapping(uint256 => MyStruct) myStruct;
+
+    function f() public {
+        _f(arr, map, myStruct[1]);
+        MyStruct storage _myStruct = myStruct[1];
+        MyStruct memory myMem = MyStruct(0);
+    }
+
+    function _f(
+        uint256[] storage _arr,
+        mapping(uint256 => address) storage _map,
+        MyStruct storage _myStruct
+    ) internal {}
+
+    // You can return memory variables
+    function g(uint256[] memory _arr) public returns (uint256[] memory) {
+        // do something with memory array
+    }
+
+    function h(uint256[] calldata _arr) external {
+        // do something with calldata array
+    }
+}
+```
+
+# Transient Storage
+
+```solidity
+pragma solidity ^0.8.24;
+
+// Make sure EVM version and VM set to Cancun
+
+// Storage - data is stored on the blockchain
+// Memory - data is cleared out after a function call
+// Transient storage - data is cleared out after a transaction
+
+interface ITest {
+    function val() external view returns (uint256);
+    function test() external;
+}
+
+contract Callback {
+    uint256 public val;
+
+    fallback() external {
+        val = ITest(msg.sender).val();
+    }
+
+    function test(address target) external {
+        ITest(target).test();
+    }
+}
+
+contract TestStorage {
+    uint256 public val;
+
+    function test() public {
+        val = 123;
+        bytes memory b = "";
+        msg.sender.call(b);
+    }
+}
+
+contract TestTransientStorage {
+    bytes32 constant SLOT = 0;
+
+    function test() public {
+        assembly {
+            tstore(SLOT, 321)
+        }
+        bytes memory b = "";
+        msg.sender.call(b);
+    }
+
+    function val() public view returns (uint256 v) {
+        assembly {
+            v := tload(SLOT)
+        }
+    }
+}
+
+contract ReentrancyGuard {
+    bool private locked;
+
+    modifier lock() {
+        require(!locked);
+        locked = true;
+        _;
+        locked = false;
+    }
+
+    function test() public lock {
+        // Ignore call error
+        bytes memory b = "";
+        msg.sender.call(b);
+    }
+}
+
+contract ReentrancyGuardTransient {
+    bytes32 constant SLOT = 0;
+
+    modifier lock() {
+        assembly {
+            if tload(SLOT) { revert(0, 0) }
+            tstore(SLOT, 1)
+        }
+        _;
+        assembly {
+            tstore(SLOT, 0)
+        }
+    }
+
+    function test() external lock {
+        // Ignore call error
+        bytes memory b = "";
+        msg.sender.call(b);
+    }
+}
+```
+
+# Function
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Function {
+    // Functions can return multiple values.
+    function returnMany() public pure returns (uint256, bool, uint256) {
+        return (1, true, 2);
+    }
+
+    // Return values can be named.
+    function named() public pure returns (uint256 x, bool b, uint256 y) {
+        return (1, true, 2);
+    }
+
+    // Return values can be assigned to their name.
+    // In this case the return statement can be omitted.
+    function assigned() public pure returns (uint256 x, bool b, uint256 y) {
+        x = 1;
+        b = true;
+        y = 2;
+    }
+
+    // Use destructuring assignment when calling another
+    // function that returns multiple values.
+    function destructuringAssignments()
+        public
+        pure
+        returns (uint256, bool, uint256, uint256, uint256)
+    {
+        (uint256 i, bool b, uint256 j) = returnMany();
+
+        // Values can be left out.
+        (uint256 x,, uint256 y) = (4, 5, 6);
+
+        return (i, b, j, x, y);
+    }
+
+    // Cannot use map for either input or output
+
+    // Can use array for input
+    function arrayInput(uint256[] memory _arr) public {}
+
+    // Can use array for output
+    uint256[] public arr;
+
+    function arrayOutput() public view returns (uint256[] memory) {
+        return arr;
+    }
+}
+
+// Call function with key-value inputs
+contract XYZ {
+    function someFuncWithManyInputs(
+        uint256 x,
+        uint256 y,
+        uint256 z,
+        address a,
+        bool b,
+        string memory c
+    ) public pure returns (uint256) {}
+
+    function callFunc() external pure returns (uint256) {
+        return someFuncWithManyInputs(1, 2, 3, address(0), true, "c");
+    }
+
+    function callFuncWithKeyValue() external pure returns (uint256) {
+        return someFuncWithManyInputs({
+            a: address(0),
+            b: true,
+            c: "c",
+            x: 1,
+            y: 2,
+            z: 3
+        });
+    }
+}
+```
+
+# View and Pure Functions
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.2;
+
+contract ViewAndPure {
+    uint256 public x = 1;
+
+    function add(uint256 y) public view returns (uint256) {
+        return x + y;
+    }
+
+    function addPure(uint256 i, uint256 j) public  pure returns (uint256) {
+        return i + j;
+    }
+}
+```
+
+# Error
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.2;
+
+contract Error {
+    // Require should be used to validate conditions such as:
+    // - inputs
+    // - conditions before execution
+    // - return values from calls to other functions
+    function testRequire(uint256 i) public pure {
+        require(i > 10, "Input must be greater than 10");
+    }
+
+    function testRevert(uint256 i) public pure {
+        if (i > 10) {
+            revert("Input must be greater than 10");
+        }
+    }
+
+    uint256 public num;
+
+    function testAssert() public view {
+        // Assert should only be used to test for internal errors and to check invariants.
+        // Here we assert that num is always equal to 0
+        // since it is impossible to update the value of num
+        assert(num == 0);
+    }
+
+    error InsufficientBalance(uint256 balance, uint256 withdrawAmount);
+
+    function testCustomError(uint256 _withdrawAmount) public view {
+        uint256 bal = address(this).balance;
+        if (bal < _withdrawAmount) {
+            revert InsufficientBalance({
+                balance: bal,
+                withdrawAmount:_withdrawAmount
+            });
+        }
+    }
+}
+```
+
+# Function Modifier
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract FunctionModifier {
+    // We will use these variables to demonstrate how to use
+    // modifiers.
+    address public owner;
+    uint256 public x = 10;
+    bool public locked;
+
+    constructor() {
+        // Set the transaction sender as the owner of the contract.
+        owner = msg.sender;
+    }
+
+    // Modifier to check that the caller is the owner of
+    // the contract.
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not owner");
+        // Underscore is a special character only used inside
+        // a function modifier and it tells Solidity to
+        // execute the rest of the code.
+        _;
+    }
+
+    // Modifiers can take inputs. This modifier checks that the
+    // address passed in is not the zero address.
+    modifier validAddress(address _addr) {
+        require(_addr != address(0), "Not valid address");
+        _;
+    }
+
+    function changeOwner(address _newOwner)
+        public
+        onlyOwner
+        validAddress(_newOwner)
+    {
+        owner = _newOwner;
+    }
+
+    // Modifiers can be called before and / or after a function.
+    // This modifier prevents a function from being called while
+    // it is still executing.
+    modifier noReentrancy() {
+        require(!locked, "No reentrancy");
+
+        locked = true;
+        _;
+        locked = false;
+    }
+
+    function decrement(uint256 i) public noReentrancy {
+        x -= i;
+
+        if (i > 1) {
+            decrement(i - 1);
+        }
+    }
+}
+```
+
+# Events
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.2;
+
+contract Events {
+    event Log(address indexed sender, string message);
+    event AnotherLog();
+
+    function testEvent() public {
+        emit Log(msg.sender, 'Hello World!');
+        emit AnotherLog();
+    }
+}
+```
+
+# Constructor
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+// Base contract X
+contract X {
+    string public name;
+
+    constructor(string memory _name) {
+        name = _name;
+    }
+}
+
+// Base contract Y
+contract Y {
+    string public text;
+
+    constructor(string memory _text) {
+        text = _text;
+    }
+}
+
+// There are 2 ways to initialize parent contract with parameters.
+
+// Pass the parameters here in the inheritance list.
+contract B is X("Input to X"), Y("Input to Y") {}
+
+contract C is X, Y {
+    // Pass the parameters here in the constructor,
+    // similar to function modifiers.
+    constructor(string memory _name, string memory _text) X(_name) Y(_text) {}
+}
+
+// Parent constructors are always called in the order of inheritance
+// regardless of the order of parent contracts listed in the
+// constructor of the child contract.
+
+// Order of constructors called:
+// 1. X
+// 2. Y
+// 3. D
+contract D is X, Y {
+    constructor() X("X was called") Y("Y was called") {}
+}
+
+// Order of constructors called:
+// 1. X
+// 2. Y
+// 3. E
+contract E is X, Y {
+    constructor() Y("Y was called") X("X was called") {}
+}
 ```
